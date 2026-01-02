@@ -1,0 +1,138 @@
+import pandas as pd
+import json
+import yfinance as yf
+from datetime import datetime
+import os
+
+ISIN_MAP = {
+    "IE00B4L5Y983": "SWDA.SW",
+    "IE00B4L5YC18": "SEMA.SW"
+}
+
+# Zentraler Dateiname - Falls du die App im Ordner 'Portfoliotracker' startest, 
+# lass es bei 'portfolio.json'.
+PORTFOLIO_FILE = 'portfolio.json' 
+
+def calculate_portfolio_data():
+    if not os.path.exists(PORTFOLIO_FILE):
+        raise Exception(f"Die Datei '{PORTFOLIO_FILE}' wurde nicht gefunden im Pfad: {os.getcwd()}")
+
+    with open(PORTFOLIO_FILE, 'r') as f:
+        data = json.load(f)
+
+    transactions = data.get('transactions', [])
+    cash_chf = data.get('cash', 0)
+    
+    # Aktuelle Preise abrufen
+    prices = {}
+    for isin, ticker in ISIN_MAP.items():
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period="1d")
+            prices[isin.upper()] = hist['Close'].iloc[-1] if not hist.empty else 0
+        except:
+            prices[isin.upper()] = 0
+    
+    # Aktuellen Wechselkurs abrufen
+    try:
+        fx_rate = yf.Ticker("USDCHF=X").history(period="1d")['Close'].iloc[-1]
+    except:
+        fx_rate = 1.0 
+
+    results = []
+    total_stock_val = 0
+    total_invested = 0
+    total_fees = 0
+
+    for t in transactions:
+        t_isin = t['isin'].strip().upper()
+        price_now = prices.get(t_isin, 0)
+        
+        # Kaufwert (ohne Gebühren, wie bisher)
+        val_buy = t['quantity'] * t['price'] * t['currency_rate']
+        
+        mult = fx_rate if t['currency_rate'] != 1.0 else 1.0
+        val_now = t['quantity'] * price_now * mult
+        
+        t_fees = t.get('fees', 0)
+        # Total Gain berechnet sich aus Marktwert minus Einsatz minus Gebühren
+        total_gain = val_now - val_buy - t_fees
+        
+        stock_gain = (price_now - t['price']) * t['quantity'] * t['currency_rate']
+        fx_gain = total_gain - stock_gain 
+
+        total_stock_val += val_now
+        total_invested += val_buy
+        total_fees += t_fees # Hier sammeln wir alle Gebühren (die 21.98 CHF)
+        
+        results.append({
+            "Name": t_isin,
+            "Ticker": ISIN_MAP.get(t_isin, "N/A"),
+            "Menge": t['quantity'],
+            "Wert (CHF)": round(val_now, 2),
+            "Investiert (CHF)": round(val_buy, 2),
+            "Stock Gain": round(stock_gain, 2),
+            "FX Gain": round(fx_gain, 2),
+            "Total Gain": round(total_gain, 2),
+            "Gebühren": t_fees
+        })
+
+    # Hier ist die entscheidende Änderung für den Net Worth:
+    # Wir ziehen die Gebühren vom Gesamtwert ab, da dieses Geld ausgegeben wurde.
+    net_worth = (total_stock_val + cash_chf)
+
+    return {
+        "df": pd.DataFrame(results),
+        "total_stock_val": total_stock_val,
+        "total_invested": total_invested,
+        "cash": cash_chf,
+        "total_val_with_fees": net_worth, # Der korrigierte Portfoliowert
+        "fx_rate": fx_rate,
+        "total_fees": total_fees
+    }
+
+def get_historical_performance():
+    if not os.path.exists(PORTFOLIO_FILE):
+        return pd.DataFrame()
+
+    with open(PORTFOLIO_FILE, 'r') as f:
+        data = json.load(f)
+    transactions = data.get('transactions', [])
+    
+    if not transactions: 
+        return pd.DataFrame()
+
+    tickers = list(ISIN_MAP.values())
+    # Download Kurse + FX
+    raw_data = yf.download(tickers + ["USDCHF=X"], start="2025-12-05", interval="1h")['Close']
+    raw_data = raw_data.ffill() 
+    
+    history_list = []
+    for timestamp in raw_data.index:
+        current_day_val = 0
+        current_day_invested = 0
+        # Timezone Handling
+        compare_ts = timestamp.tz_localize(None) if timestamp.tzinfo else timestamp
+        
+        for t in transactions:
+            t_date = pd.to_datetime(t['datetime'][:10])
+            if t_date <= compare_ts:
+                ticker = ISIN_MAP.get(t['isin'].strip().upper())
+                current_day_invested += (t['quantity'] * t['price'] * t['currency_rate'])
+                
+                if ticker in raw_data.columns:
+                    p = raw_data.loc[timestamp, ticker]
+                    # FX Check: Nur USD/CHF nutzen wenn t in Fremdwährung war
+                    f = raw_data.loc[timestamp, "USDCHF=X"] if t['currency_rate'] != 1.0 else 1.0
+                    
+                    if pd.notna(p) and pd.notna(f):
+                        current_day_val += (t['quantity'] * p * f)
+        
+        if current_day_val > 0:
+            history_list.append({
+                "Datum": timestamp, 
+                "Marktwert_CHF": current_day_val, 
+                "Einsatz_CHF": current_day_invested
+            })
+            
+    return pd.DataFrame(history_list)
