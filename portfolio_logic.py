@@ -101,21 +101,21 @@ def calculate_portfolio_data():
 def get_historical_performance():
     if not os.path.exists(PORTFOLIO_FILE):
         return pd.DataFrame()
-
-
     with open(PORTFOLIO_FILE, 'r') as f:
         data = json.load(f)
     transactions = data.get('transactions', [])
    
     if not transactions:
         return pd.DataFrame()
-
-
+    
+    # WICHTIG: Finde das ERSTE Kaufdatum aus den Transaktionen
+    first_transaction_date = min(pd.to_datetime(t['datetime']) for t in transactions)
+    start_str = first_transaction_date.strftime("%Y-%m-%d")
+    start_date = first_transaction_date
+    
     tickers = list(ISIN_MAP.values())
    
     # --- DYNAMISCHES INTERVALL LOGIK ---
-    start_str = "2025-12-05"
-    start_date = datetime.strptime(start_str, "%Y-%m-%d")
     days_diff = (datetime.now() - start_date).days
    
     # Nutze 15m für Details wenn < 60 Tage, sonst 1h Fallback
@@ -137,9 +137,13 @@ def get_historical_performance():
         current_day_val = 0
         current_day_invested = 0
         compare_ts = timestamp.tz_localize(None) if timestamp.tzinfo else timestamp
+        
+        # NEU: Überspringe alle Zeitpunkte VOR dem ersten Kauf
+        if compare_ts < first_transaction_date:
+            continue
        
         for t in transactions:
-            t_date = pd.to_datetime(t['datetime'][:10])
+            t_date = pd.to_datetime(t['datetime'])
             if t_date <= compare_ts:
                 ticker = ISIN_MAP.get(t['isin'].strip().upper())
                 current_day_invested += (t['quantity'] * t['price'] * t['currency_rate'])
