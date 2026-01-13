@@ -217,7 +217,7 @@ if not h_df.empty:
     # 1. Einsatz-Linie (Grau)
     fig_line.add_trace(go.Scatter(
         x=h_df_filtered['Datum'], y=h_df_filtered['Einsatz_CHF'], name="Einsatz-Basis",
-        line=dict(width=5, color="#5D6D7E"),
+        line=dict(width=3, color="#000000"),
         showlegend=True
     ))
 
@@ -334,7 +334,7 @@ if not h_df.empty:
         hovertemplate="<b>Marktwert: %{y:,.2f} CHF</b><br>Gain: %{customdata[0]:+,.2f} CHF<br>Perf: %{customdata[1]:+.2f}%<extra></extra>"
     ))
 
-    # Layout mit Rangeselector
+    # Layout mit optimiertem Rangeselector
     fig_line.update_layout(
         xaxis=dict(
             gridcolor='#f0f0f0',
@@ -344,16 +344,19 @@ if not h_df.empty:
             ],
             rangeselector=dict(
                 buttons=list([
-                    dict(count=1, label="1D", step="day", stepmode="backward"),
+                    # 'todate' stellt sicher, dass nur Daten ab 00:00 Uhr des heutigen Tages gezeigt werden
+                    dict(count=1, label="1D", step="day", stepmode="todate"),
                     dict(count=7, label="1W", step="day", stepmode="backward"),
                     dict(count=1, label="1M", step="month", stepmode="backward"),
                     dict(count=1, label="YTD", step="year", stepmode="todate"),
                     dict(step="all", label="ALL")
-                ])
+                ]),
+                bgcolor="#FFFFFF",
+                activecolor="#CABA9C"
             )
         )
     )
-
+    
     st.markdown("""
         <style>
         .graph-container {
@@ -390,7 +393,7 @@ with col_main:
 
     st.dataframe(
         df[cols].style.map(style_positive_negative, subset=[c for c in ["Stock Gain", "FX Gain", "Total Gain"] if c in cols]).format(precision=2),
-        use_container_width=True, height=150
+        use_container_width=True, height=108
     )
 
     # --- SCHNELL-LINKS BEREICH ---
