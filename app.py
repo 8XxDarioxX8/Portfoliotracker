@@ -159,13 +159,33 @@ else:
     total_perf_pct = 0.0
     total_perf_abs = 0.0
 
+# GEÄNDERT: Tagesperformance seit erstem Datenpunkt des Tages
 daily_delta_pct = 0.0
 daily_delta_abs = 0.0
 if len(h_df) >= 2:
-    prev_val_h = h_df['Marktwert_CHF'].iloc[-2]
-    current_val_h = h_df['Marktwert_CHF'].iloc[-1]
-    daily_delta_abs = current_val_h - prev_val_h
-    daily_delta_pct = (daily_delta_abs / prev_val_h) * 100
+    h_copy = h_df.copy()
+    h_copy['Datum'] = pd.to_datetime(h_copy['Datum'])
+    
+    # Heutiges Datum (ohne Uhrzeit)
+    today = pd.Timestamp.now().normalize()
+    
+    # Alle Einträge von heute
+    today_data = h_copy[h_copy['Datum'].dt.normalize() == today]
+    
+    if len(today_data) > 0:
+        # Erster Wert von heute (Tagesbeginn)
+        first_today = today_data['Marktwert_CHF'].iloc[0]
+        # Aktueller Wert (letzter Eintrag von heute)
+        current_val_h = today_data['Marktwert_CHF'].iloc[-1]
+        
+        daily_delta_abs = current_val_h - first_today
+        daily_delta_pct = (daily_delta_abs / first_today) * 100
+    else:
+        # Fallback: Vergleich zum letzten verfügbaren Tag
+        prev_val_h = h_df['Marktwert_CHF'].iloc[-2]
+        current_val_h = h_df['Marktwert_CHF'].iloc[-1]
+        daily_delta_abs = current_val_h - prev_val_h
+        daily_delta_pct = (daily_delta_abs / prev_val_h) * 100
 
 m1.metric(
     label="Net Worth (Gesamt)",
