@@ -1,5 +1,5 @@
 {
-  "cash": 1135.39,
+  "cash": 1187.85,
   "transactions": [
     {
       "isin": "IE00B4L5Y983",
@@ -31,6 +31,22 @@
       "price": 54.0261,
       "currency_rate": 0.796617,
       "datetime": "2026-01-05 12:53:36",
+      "fees": 0.06
+    },
+    {
+      "isin": "IE00B4L5Y983",
+      "quantity": 1,
+      "price": 132.68,
+      "currency_rate": 0.779263,
+      "datetime": "2026-02-05 12:48:28",
+      "fees": 0.16
+    },
+    {
+      "isin": "IE00B4L5YC18",
+      "quantity": 1,
+      "price": 56.371,
+      "currency_rate": 0.779354,
+      "datetime": "2026-02-05 12:53:37",
       "fees": 0.06
     }
     
